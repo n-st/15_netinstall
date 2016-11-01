@@ -1,0 +1,48 @@
+#!/bin/sh
+
+debianrelease=jessie
+debianarch=amd64
+
+nameserver=8.8.8.8
+
+cidr2mask ()
+{
+   # Number of args to shift, 255..255, first non-255 byte, zeroes
+   set -- $(( 5 - ($1 / 8) )) 255 255 255 255 $(( (255 << (8 - ($1 % 8))) & 255 )) 0 0 0
+   [ $1 -gt 1 ] && shift $1 || shift
+   echo ${1-0}.${2-0}.${3-0}.${4-0}
+}
+
+ip=$(ip route get 1 | awk '{print $NF;exit}')
+gateway=$(ip route get 1 | awk '{print $3;exit}')
+default_if=$(ip route list | awk '/^default/ {print $5}')
+cidr=$(ip -o -f inet addr show $default_if | awk '{print $4}')
+netmask=$(cidr2mask "${cidr##*/}")
+
+echo "Detected network configuration:" 1>&2
+echo "IP:       $ip" 1>&2
+echo "Gateway:  $gateway" 1>&2
+echo "Netmask:  $netmask" 1>&2
+
+if mountpoint /boot > /dev/null 2>&1
+then
+    ipxepath="/ipxe.lkrn"
+else
+    ipxepath="/boot/ipxe.lkrn"
+fi
+
+if ! test -f "/boot/ipxe.lkrn"
+then
+    wget http://boot.ipxe.org/ipxe.lkrn -O /boot/ipxe.lkrn
+fi
+
+cat <<EOF
+menuentry "Install from internet mirror: Arch Linux latest x86_64" {
+    linux16 ${ipxepath} set net0/ip $ip \&\& set net0/netmask $netmask \&\& set net0/gateway $gateway \&\& set dns $nameserver \&\& ifopen net0 \&\& initrd http://mirror.nl.leaseweb.net/archlinux/iso/latest/arch/boot/x86_64/archiso.img \&\& chain http://mirror.nl.leaseweb.net/archlinux/iso/latest/arch/boot/x86_64/vmlinuz archiso_http_srv=http://mirror.nl.leaseweb.net/archlinux/iso/latest/ archisobasedir=arch checksum=y ip=${ip}::${gateway}:${netmask}::eth0
+}
+# latest !
+
+menuentry "Install from internet mirror: Debian ${debianrelease} amd64" {
+    linux16 ${ipxepath} set net0/ip $ip \&\& set net0/netmask $netmask \&\& set net0/gateway $gateway \&\& set dns $nameserver \&\& ifopen net0 \&\& initrd http://ftp2.de.debian.org/debian/dists/${debianrelease}/main/installer-${debianarch}/current/images/netboot/debian-installer/${debianarch}/initrd.gz \&\& chain http://ftp2.de.debian.org/debian/dists/${debianrelease}/main/installer-${debianarch}/current/images/netboot/debian-installer/${debianarch}/linux netcfg/choose_interface=\\\$\{net0/mac\}
+}
+EOF
