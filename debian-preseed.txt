@@ -71,7 +71,7 @@ d-i passwd/username string nst
 #d-i passwd/user-password password change.me.now
 #d-i passwd/user-password-again password change.me.now
 # or encrypted using an MD5 hash.
-d-i passwd/user-password-crypted password 6c6683cc855e55cfd746a428cb43b6fc
+d-i passwd/user-password-crypted password $1$AAAAAAAA$hA.KDiHlL5oHM5STyYpmd/
 
 ### Clock and time zone setup
 d-i clock-setup/utc boolean true
